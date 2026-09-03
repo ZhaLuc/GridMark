@@ -33,3 +33,40 @@ This repository contains the Arduino firmware, ROS 2 packages, trained detector 
 ## Core features
 
 - Dual-BTS7960 side drive with signed PWM serial commands
+- Quadrature ISR decoding on Mega interrupt pins
+- ROS 2 Jazzy `serial_bridge_node` (`/cmd_vel` ↔ `/odom` + `odom`→`base_link`)
+- `slam_toolbox` online async mapping (`/map`, `map`→`odom`)
+- Nav2 with Regulated Pure Pursuit + custom frontier explorer
+- `usb_cam` + Ultralytics YOLO26 TensorRT detector at capped Hz
+- Mission node: consecutive detections → map estimate → stop + PNG
+
+## Technology stack
+
+| Layer | Technology | Role |
+| --- | --- | --- |
+| High-level compute | NVIDIA Jetson Orin Nano Super, JetPack 6.x, Ubuntu 22.04 | ROS 2, SLAM, Nav2, TensorRT |
+| Low-level control | Arduino Mega 2560 | Motors, encoders, serial protocol |
+| Middleware | ROS 2 Jazzy Jalisco | Topics, TF, actions, launch |
+| SLAM | slam_toolbox (online async) | Occupancy mapping |
+| Navigation | Nav2 + frontier explorer | Autonomous coverage |
+| Perception | Ultralytics YOLO26-nano → ONNX / TensorRT | Target detection |
+| LiDAR | RPLIDAR A2 | `/scan` |
+| Drive | BTS7960 ×2, 4WD + encoders | Motion + odometry |
+
+## Operating captures
+
+| View | Asset |
+| --- | --- |
+| Chassis (top-down) | [docs/images/robot/robot-top-view.jpg](images/robot/robot-top-view.jpg) |
+| Hero / track | [docs/images/robot/robot-hero.jpg](images/robot/robot-hero.jpg) |
+| Online SLAM (RViz) | [docs/images/features/feature-slam-map-rviz.jpg](images/features/feature-slam-map-rviz.jpg) |
+| 3D map view | [docs/images/features/feature-slam-map-3d.jpg](images/features/feature-slam-map-3d.jpg) |
+| Field operation | [docs/images/features/feature-robot-operating.jpg](images/features/feature-robot-operating.jpg) |
+| Gripper / mission hardware | [docs/images/features/feature-gripper-top.jpg](images/features/feature-gripper-top.jpg) |
+| Annotated mission map | [docs/images/features/feature-annotated-mission-map.jpg](images/features/feature-annotated-mission-map.jpg) |
+
+## Related
+
+- [Architecture](architecture.md)
+- [Field test log](field-test-log.md)
+- [Hardware](hardware/README.md)
