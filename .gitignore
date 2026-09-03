@@ -1,0 +1,30 @@
+# ROS 2
+robot_ws/build/
+robot_ws/install/
+robot_ws/log/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Artifacts
+mission_outputs/
+*.bag
+*.db3
+robot_ws/src/robot_perception/models/datasets/
+robot_ws/src/robot_perception/models/runs/
+robot_ws/src/robot_perception/models/*.zip
+
+# Env
+.env
+.venv/
+venv/
