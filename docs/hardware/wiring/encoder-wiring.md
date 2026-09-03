@@ -33,3 +33,69 @@ Encoder modules on these chassis kits are typically **5 V** logic devices. Power
 Share a single solid GND between Mega, encoders, and BTS7960 **logic** grounds so A/B thresholds are valid. Motor high-current return stays on the pack/BTS7960 power harness (see power wiring).
 
 ## Plain-text pin table
+
+| Component | Pin | Connects to |
+| --- | --- | --- |
+| Left encoder | Channel A | Arduino Mega D2 |
+| Left encoder | Channel B | Arduino Mega D3 |
+| Left encoder | VCC / +5V | Arduino Mega 5V |
+| Left encoder | GND | Arduino Mega GND |
+| Right encoder | Channel A | Arduino Mega D18 |
+| Right encoder | Channel B | Arduino Mega D19 |
+| Right encoder | VCC / +5V | Arduino Mega 5V |
+| Right encoder | GND | Arduino Mega GND |
+| Arduino Mega | GND | Common logic ground with drivers |
+
+If a kit exposes an index/Z channel, leave it unconnected unless firmware is extended to use it.
+
+## Which physical encoder per side?
+
+On a paralleled dual-motor side, both wheels should track similarly if the drivetrain is rigid. Builders typically wire **one encoder per side** (e.g. left-front and right-front) and treat that count as the side’s odometry. If both motors on a side have encoders, pick one consistently and document it on the robot; do not average unsynchronized counts unless the firmware explicitly supports it.
+
+## Mermaid diagram
+
+```mermaid
+flowchart LR
+  subgraph LeftEnc["Left quadrature encoder"]
+    LA[A]
+    LB[B]
+    L5V[VCC]
+    LGND[GND]
+  end
+
+  subgraph RightEnc["Right quadrature encoder"]
+    RA[A]
+    RB[B]
+    R5V[VCC]
+    RGND[GND]
+  end
+
+  subgraph Mega["Arduino Mega 2560"]
+    P2[D2 INT]
+    P3[D3 INT]
+    P18[D18 INT]
+    P19[D19 INT]
+    M5V[5V]
+    MGND[GND]
+  end
+
+  LA --> P2
+  LB --> P3
+  RA --> P18
+  RB --> P19
+  L5V --> M5V
+  R5V --> M5V
+  LGND --> MGND
+  RGND --> MGND
+```
+
+## Builder verification (how to measure ticks/rev yourself)
+
+We measured ticks-per-revolution on the assembled drivetrain.
+
+1. Lift the robot so wheels spin freely.
+2. Mark the wheel and a fixed reference on the chassis.
+3. Rotate the marked wheel exactly one revolution by hand while firmware prints encoder counts.
+4. Record left and right counts separately; use those measured CPR/PPR values in the odometry model inside `robot_firmware` / `robot_bridge`.
+
+Gearbox ratio and encoder disc resolution vary by kit SKU - always measure on the assembled robot.
