@@ -168,3 +168,96 @@ def generate_launch_description() -> LaunchDescription:
             'autostart': 'true',
         }.items(),
     )
+
+    perception_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(perception_share, 'launch', 'perception.launch.py')
+        ),
+    )
+
+                                                                      
+                                                                     
+    camera_tf = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='base_to_camera_tf',
+        output='screen',
+        arguments=[
+            '--x', camera_x,
+            '--y', camera_y,
+            '--z', camera_z,
+            '--yaw', '0.0',
+            '--pitch', '0.0',
+            '--roll', '0.0',
+            '--frame-id', 'base_link',
+            '--child-frame-id', 'camera_link',
+        ],
+    )
+
+    frontier_explorer = Node(
+        package='robot_navigation',
+        executable='frontier_explorer_node',
+        name='frontier_explorer_node',
+        output='screen',
+    )
+
+    mission_node = Node(
+        package='robot_mission',
+        executable='mission_node',
+        name='mission_node',
+        output='screen',
+        parameters=[{
+            'target_class': 'target_object',
+            'confidence_threshold': 0.6,
+            'consecutive_required': 3,
+            'use_depth': False,
+            'output_dir': 'mission_outputs',
+        }],
+    )
+
+    start_upper_stack_when_map_ready = RegisterEventHandler(
+        OnProcessExit(
+            target_action=wait_map_proc,
+            on_exit=[
+                LogInfo(
+                    msg='[bringup] /map alive - starting Nav2, perception, '
+                        'frontier explorer, mission'
+                ),
+                navigation_launch,
+                perception_launch,
+                camera_tf,
+                TimerAction(
+                    period=5.0,
+                    actions=[frontier_explorer, mission_node],
+                ),
+            ],
+        )
+    )
+
+    return LaunchDescription([
+        DeclareLaunchArgument('use_sim_time', default_value='false'),
+        DeclareLaunchArgument(
+            'serial_port',
+            default_value='/dev/ttyACM0',
+            description='Arduino Mega USB serial device (configure in odom YAML too)',
+        ),
+        DeclareLaunchArgument(
+            'lidar_port',
+            default_value='/dev/ttyUSB0',
+            description='RPLIDAR USB serial device',
+        ),
+        DeclareLaunchArgument('lidar_x', default_value='0.10'),
+        DeclareLaunchArgument('lidar_y', default_value='0.00'),
+        DeclareLaunchArgument('lidar_z', default_value='0.15'),
+        DeclareLaunchArgument('camera_x', default_value='0.12'),
+        DeclareLaunchArgument('camera_y', default_value='0.00'),
+        DeclareLaunchArgument('camera_z', default_value='0.20'),
+        LogInfo(msg='[bringup] full_system: starting serial bridge'),
+        LogInfo(msg=['[bringup] configured serial_port=', serial_port]),
+        bridge_launch,
+        rplidar_delayed,
+        wait_odom_scan,
+        start_slam_when_ready,
+        wait_map,
+        start_upper_stack_when_map_ready,
+    ])
