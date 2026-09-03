@@ -198,3 +198,83 @@ Deep dive: [docs/architecture.md](docs/architecture.md) · [docs/system-overview
 | `/image_raw` | `sensor_msgs/Image` |
 | `/detections` | `vision_msgs/Detection2DArray` |
 | `/exploration_complete` | `std_msgs/Bool` |
+
+**TF:** `map` → `odom` → `base_link` → `{lidar_link, camera_link}`
+
+Full semantics: [docs/api.md](docs/api.md)
+
+## Project structure
+
+```text
+GridMark/
+├── LICENSE
+├── README.md
+├── docs/
+│   ├── images/robot/          top-down chassis photo
+│   ├── images/features/       SLAM map, YOLO, operating captures
+│   ├── images/schematics/     wiring schematics
+│   └── ...
+└── robot_ws/src/
+    ├── robot_bringup/
+    ├── robot_firmware/
+    ├── robot_bridge/
+    ├── robot_slam/
+    ├── robot_navigation/
+    ├── robot_perception/      includes trained YOLO26 weights
+    └── robot_mission/
+```
+
+## Installation
+
+See **[docs/installation.md](docs/installation.md)**.
+
+```bash
+git clone https://github.com/LucasZhang3/SLAM.git
+cd SLAM/robot_ws
+source /opt/ros/jazzy/setup.bash
+rosdep install --from-paths src -y --ignore-src
+colcon build --symlink-install
+source install/setup.bash
+```
+
+## Configuration
+
+Parameters are tabulated in **[docs/configuration.md](docs/configuration.md)**.
+
+Firmware geometry constants match `robot_bridge/config/odom_calibration.yaml`.
+
+## Quick start
+
+```bash
+ros2 launch robot_bringup full_system.launch.py
+```
+
+CLI cookbook: [docs/cli.md](docs/cli.md)
+
+## Examples
+
+**Serial motor check (115200):**
+
+```text
+L80 R80
+L0 R0
+```
+
+**Perception with shipped weights:**
+
+```bash
+ros2 launch robot_perception perception.launch.py
+```
+
+## Execution flow
+
+1. Bridge streams PWM; Mega returns `ODOM` deltas.
+2. Bridge publishes `/odom` + TF.
+3. LiDAR publishes `/scan`; SLAM builds `/map`.
+4. Frontier explorer sends Nav2 goals.
+5. YOLO publishes `/detections`.
+6. Mission confirms target → zero `/cmd_vel`, cancel Nav2, write PNG.
+
+## Module overview
+
+| Module | Doc |
