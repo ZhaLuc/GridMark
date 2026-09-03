@@ -98,3 +98,103 @@ class FrontierExplorerNode(Node):
             self._finish_exploration()
             return
 
+        self._send_goal(goal_xy[0], goal_xy[1], robot_xy)
+
+    def _lookup_robot_xy(self) -> Optional[Tuple[float, float]]:
+        try:
+            tf = self._tf_buffer.lookup_transform(
+                self._map_frame,
+                self._base_frame,
+                rclpy.time.Time(),
+                timeout=Duration(seconds=self._tf_timeout),
+            )
+        except TransformException as exc:
+            self.get_logger().warn(f'TF {self._map_frame}→{self._base_frame} failed: {exc}')
+            return None
+        return (tf.transform.translation.x, tf.transform.translation.y)
+
+    def _finish_exploration(self) -> None:
+        self._exploration_complete = True
+        self.get_logger().info('Exploration complete')
+        msg = Bool()
+        msg.data = True
+        self._done_pub.publish(msg)
+
+    def _send_goal(
+        self,
+        gx: float,
+        gy: float,
+        robot_xy: Tuple[float, float],
+    ) -> None:
+        yaw = math.atan2(gy - robot_xy[1], gx - robot_xy[0])
+        pose = PoseStamped()
+        pose.header.stamp = self.get_clock().now().to_msg()
+        pose.header.frame_id = self._map_frame
+        pose.pose.position.x = gx
+        pose.pose.position.y = gy
+        pose.pose.position.z = 0.0
+        pose.pose.orientation.z = math.sin(0.5 * yaw)
+        pose.pose.orientation.w = math.cos(0.5 * yaw)
+
+        goal = NavigateToPose.Goal()
+        goal.pose = pose
+
+        self._busy = True
+        self.get_logger().info(f'Sending frontier goal to ({gx:.2f}, {gy:.2f})')
+        send_future = self._nav_client.send_goal_async(goal)
+        send_future.add_done_callback(
+            lambda fut, gxy=(gx, gy): self._on_goal_response(fut, gxy)
+        )
+
+    def _on_goal_response(self, future, goal_xy: Tuple[float, float]) -> None:
+        goal_handle = future.result()
+        if goal_handle is None or not goal_handle.accepted:
+            self.get_logger().warn('NavigateToPose goal rejected')
+            self._failed_goals.append(goal_xy)
+            self._busy = False
+            return
+
+        result_future = goal_handle.get_result_async()
+        result_future.add_done_callback(
+            lambda fut, gxy=goal_xy: self._on_goal_result(fut, gxy)
+        )
+
+    def _on_goal_result(self, future, goal_xy: Tuple[float, float]) -> None:
+        try:
+            wrapped = future.result()
+            status = wrapped.status
+        except Exception as exc: 
+            self.get_logger().error(f'NavigateToPose result error: {exc}')
+            self._failed_goals.append(goal_xy)
+            self._busy = False
+            return
+
+        if status == GoalStatus.STATUS_SUCCEEDED:
+            self.get_logger().info('Frontier goal succeeded')
+        else:
+            self.get_logger().warn(f'Frontier goal ended with status={status}; blacklisting')
+            self._failed_goals.append(goal_xy)
+
+        self._busy = False
+
+                                                                        
+                       
+                                                                        
+
+    def _select_frontier_goal(
+        self,
+        grid: OccupancyGrid,
+        robot_xy: Tuple[float, float],
+    ) -> Optional[Tuple[float, float]]:
+        frontiers = self._find_frontier_cells(grid)
+        if not frontiers:
+            return None
+
+        clusters = self._cluster_frontiers(frontiers)
+        candidates: List[Tuple[float, float, int]] = []
+        for cluster in clusters:
+            if len(cluster) < self._min_frontier_size:
+                continue
+            cx, cy = self._cluster_centroid_world(grid, cluster)
+            if self._is_blacklisted(cx, cy):
+                continue
