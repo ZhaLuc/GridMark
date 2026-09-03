@@ -198,3 +198,128 @@ class FrontierExplorerNode(Node):
             cx, cy = self._cluster_centroid_world(grid, cluster)
             if self._is_blacklisted(cx, cy):
                 continue
+            candidates.append((cx, cy, len(cluster)))
+
+        if not candidates:
+            return None
+
+        rx, ry = robot_xy
+
+        def sort_key(item: Tuple[float, float, int]) -> Tuple[float, float]:
+            cx, cy, size = item
+            dist = math.hypot(cx - rx, cy - ry)
+                                                                      
+            return (dist, -float(size))
+
+        candidates.sort(key=sort_key)
+        best = candidates[0]
+        return (best[0], best[1])
+
+    def _is_blacklisted(self, x: float, y: float) -> bool:
+        r2 = self._blacklist_radius * self._blacklist_radius
+        for fx, fy in self._failed_goals:
+            if (x - fx) * (x - fx) + (y - fy) * (y - fy) <= r2:
+                return True
+        return False
+
+    def _find_frontier_cells(self, grid: OccupancyGrid) -> List[GridIndex]:
+        width = grid.info.width
+        height = grid.info.height
+        data = grid.data
+        frontiers: List[GridIndex] = []
+
+        def cell(ix: int, iy: int) -> int:
+            return int(data[iy * width + ix])
+
+        def is_free(val: int) -> bool:
+            return 0 <= val < self.FREE_MAX
+
+        def is_unknown(val: int) -> bool:
+            return val == self.UNKNOWN
+
+        for iy in range(height):
+            row = iy * width
+            for ix in range(width):
+                val = int(data[row + ix])
+                if not is_free(val):
+                    continue
+                                                         
+                found_unknown = False
+                for dy in (-1, 0, 1):
+                    ny = iy + dy
+                    if ny < 0 or ny >= height:
+                        continue
+                    for dx in (-1, 0, 1):
+                        if dx == 0 and dy == 0:
+                            continue
+                        nx = ix + dx
+                        if nx < 0 or nx >= width:
+                            continue
+                        if is_unknown(cell(nx, ny)):
+                            found_unknown = True
+                            break
+                    if found_unknown:
+                        break
+                if found_unknown:
+                    frontiers.append((ix, iy))
+        return frontiers
+
+    def _cluster_frontiers(self, frontiers: Sequence[GridIndex]) -> List[List[GridIndex]]:
+        """Connected-components (8-connected) via BFS flood-fill."""
+        frontier_set = set(frontiers)
+        visited = set()
+        clusters: List[List[GridIndex]] = []
+
+        for seed in frontiers:
+            if seed in visited:
+                continue
+            cluster: List[GridIndex] = []
+            q: deque[GridIndex] = deque([seed])
+            visited.add(seed)
+            while q:
+                cx, cy = q.popleft()
+                cluster.append((cx, cy))
+                for dy in (-1, 0, 1):
+                    for dx in (-1, 0, 1):
+                        if dx == 0 and dy == 0:
+                            continue
+                        n = (cx + dx, cy + dy)
+                        if n in frontier_set and n not in visited:
+                            visited.add(n)
+                            q.append(n)
+            clusters.append(cluster)
+        return clusters
+
+    def _cluster_centroid_world(
+        self,
+        grid: OccupancyGrid,
+        cluster: Sequence[GridIndex],
+    ) -> Tuple[float, float]:
+        mx = sum(c[0] for c in cluster) / float(len(cluster))
+        my = sum(c[1] for c in cluster) / float(len(cluster))
+        return self._map_to_world(grid, mx, my)
+
+    @staticmethod
+    def _map_to_world(grid: OccupancyGrid, mx: float, my: float) -> Tuple[float, float]:
+        res = grid.info.resolution
+        ox = grid.info.origin.position.x
+        oy = grid.info.origin.position.y
+                      
+        wx = ox + (mx + 0.5) * res
+        wy = oy + (my + 0.5) * res
+        return (wx, wy)
+
+def main(args=None) -> None:
+    rclpy.init(args=args)
+    node = FrontierExplorerNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
