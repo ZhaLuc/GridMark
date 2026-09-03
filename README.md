@@ -278,3 +278,84 @@ ros2 launch robot_perception perception.launch.py
 ## Module overview
 
 | Module | Doc |
+| --- | --- |
+| Bringup | [docs/packages/robot_bringup.md](docs/packages/robot_bringup.md) |
+| Firmware | [docs/packages/robot_firmware.md](docs/packages/robot_firmware.md) |
+| Bridge | [docs/packages/robot_bridge.md](docs/packages/robot_bridge.md) |
+| SLAM | [docs/packages/robot_slam.md](docs/packages/robot_slam.md) |
+| Navigation | [docs/packages/robot_navigation.md](docs/packages/robot_navigation.md) |
+| Perception | [docs/packages/robot_perception.md](docs/packages/robot_perception.md) |
+| Mission | [docs/packages/robot_mission.md](docs/packages/robot_mission.md) |
+
+## Development workflow
+
+See [docs/development.md](docs/development.md) and [docs/contributing.md](docs/contributing.md).
+
+## Testing and verification
+
+- [docs/verification-checklist.md](docs/verification-checklist.md)
+- [docs/field-test-log.md](docs/field-test-log.md)
+
+## Build process
+
+| Target | Tool |
+| --- | --- |
+| ROS packages | `colcon build` |
+| Firmware | Arduino IDE upload to Mega |
+| YOLO weights | Ultralytics train + ONNX/TensorRT export |
+
+## Deployment
+
+On-robot: Jetson boots, workspace sourced, `full_system.launch.py` started for mapping/mission runs.
+
+## Security considerations
+
+See [docs/security.md](docs/security.md).
+
+## Performance considerations
+
+YOLO capped at 8 Hz; powered USB hub for LiDAR + camera. See [docs/performance.md](docs/performance.md).
+
+## Troubleshooting
+
+[docs/troubleshooting.md](docs/troubleshooting.md)
+
+## Documentation index
+
+**[docs/README.md](docs/README.md)**
+
+## Roadmap
+
+- Deeper multi-room lifelong mapping sessions
+- Depth-camera refinement for mission ranging
+- IMU-assisted odometry
+
+## Field checklist
+
+1. Encoder constants synced in firmware and `odom_calibration.yaml`
+2. `max_wheel_speed_mps` calibrated for PWM scaling
+3. Serial devices for Mega and RPLIDAR confirmed
+4. `lidar_*` / `camera_*` TF args match measured mounts
+5. LiPo / fuse / buck sized for stall and Jetson load
+6. Powered USB hub for LiDAR + camera
+7. JetPack 6.x, ROS 2 Jazzy, Nav2, slam_toolbox, usb_cam, ultralytics, TensorRT
+8. `target_object_n.pt` / `.onnx` / `.engine` on the robot
+9. Camera intrinsics set on `mission_node`
+10. Nav2 footprint matches chassis bumper outline
+
+## Contributing
+
+[docs/contributing.md](docs/contributing.md)
+
+## License
+
+Released under the [MIT License](LICENSE). Copyright (c) 2026 Lucas Zhang.
+
+Shipped Ultralytics YOLO26 weight files remain subject to Ultralytics' licensing terms for those model artifacts.
+
+## Known pitfalls
+
+1. Odometry miscalibration smears `/map` walls.
+2. USB power/bandwidth issues without a powered hub.
+3. Incorrect lidar/camera TF mounts.
+4. Uncapped YOLO starving SLAM/Nav2 on the Orin Nano.
