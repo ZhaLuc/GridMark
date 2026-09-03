@@ -248,3 +248,153 @@ class MissionNode(Node):
                                                                                    
                                                                         
                                                                         
+                                                                        
+                                                                                       
+         
+                                                                          
+                                           
+                                        
+                                      
+         
+                                             
+                                                      
+                                                      
+                                                        
+                                 
+        x_n = (u - self.cx) / self.fx
+        y_n = (v - self.cy) / self.fy
+        d_opt_x, d_opt_y, d_opt_z = x_n, y_n, 1.0
+        opt_norm = math.sqrt(d_opt_x ** 2 + d_opt_y ** 2 + d_opt_z ** 2)
+        if opt_norm < 1e-9:
+            return None
+        d_opt_x /= opt_norm
+        d_opt_y /= opt_norm
+        d_opt_z /= opt_norm
+
+                                                               
+        d_link_x = d_opt_z
+        d_link_y = -d_opt_x
+        d_link_z = -d_opt_y
+
+                                                   
+        if self.use_depth:
+            range_m = self._range_from_depth(u, v)
+            if range_m is None:
+                                                         
+                range_m = self._range_from_ground_plane(d_link_x, d_link_y, d_link_z)
+        else:
+                                                                                
+                                                                               
+                                                                             
+                                                       
+            range_m = self._range_from_ground_plane(d_link_x, d_link_y, d_link_z)
+
+        if range_m is None:
+            return None
+        range_m = max(self.min_range_m, min(self.max_range_m, range_m))
+
+                                                                  
+        point_cam = PointStamped()
+        point_cam.header.stamp = self.get_clock().now().to_msg()
+        point_cam.header.frame_id = self.camera_frame
+        point_cam.point.x = d_link_x * range_m
+        point_cam.point.y = d_link_y * range_m
+        point_cam.point.z = d_link_z * range_m
+
+        try:
+            point_map = self._tf_buffer.transform(
+                point_cam,
+                self.map_frame,
+                timeout=Duration(seconds=self.tf_timeout),
+            )
+        except TransformException as exc:
+            self.get_logger().warn(f'TF camera→map failed: {exc}')
+            return None
+
+        return (float(point_map.point.x), float(point_map.point.y))
+
+    def _range_from_ground_plane(
+        self,
+        d_link_x: float,
+        d_link_y: float,
+        d_link_z: float,
+    ) -> Optional[float]:
+        """
+        No-depth fallback from the project spec.
+
+        Transform the camera ray into the map frame and intersect with the
+        horizontal plane z = target_height_m:
+
+            origin_map + t * dir_map has z = target_height_m
+            t = (target_height_m - origin_z) / dir_z
+
+        If |dir_z| is tiny (ray nearly parallel to the ground), fall back to
+        assumed_range_m measured along the camera ray.
+        """
+                                                           
+        try:
+            tf_cam = self._tf_buffer.lookup_transform(
+                self.map_frame,
+                self.camera_frame,
+                rclpy.time.Time(),
+                timeout=Duration(seconds=self.tf_timeout),
+            )
+        except TransformException as exc:
+            self.get_logger().warn(f'TF lookup map←camera failed: {exc}')
+            return self.assumed_range_m
+
+        ox = tf_cam.transform.translation.x
+        oy = tf_cam.transform.translation.y
+        oz = tf_cam.transform.translation.z
+        q = tf_cam.transform.rotation
+                                                                                 
+        dir_map = self._quat_rotate_vector(
+            q.x, q.y, q.z, q.w, d_link_x, d_link_y, d_link_z
+        )
+        dz = dir_map[2]
+        if abs(dz) < 1e-3:
+                                                                      
+            return self.assumed_range_m
+
+        t = (self.target_height_m - oz) / dz
+        if t < self.min_range_m:
+            return self.assumed_range_m
+
+                                                                               
+                                                        
+        if t > self.max_range_m:
+            return self.assumed_range_m
+        return t
+
+    def _range_from_depth(self, u: float, v: float) -> Optional[float]:
+        """
+        Optional RealSense (aligned depth) path when self.use_depth is True.
+
+        Samples the depth image at the bbox-center pixel and converts to meters.
+        Returns None on missing frame, bad encoding, or invalid depth so the
+        caller can fall back to the ground-plane method.
+        """
+        if self._latest_depth is None:
+            return None
+
+        depth_msg = self._latest_depth
+        width = depth_msg.width
+        height = depth_msg.height
+        ui = int(round(u))
+        vi = int(round(v))
+        if ui < 0 or vi < 0 or ui >= width or vi >= height:
+            return None
+
+                                                                      
+        vals: List[float] = []
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                x = ui + dx
+                y = vi + dy
+                if x < 0 or y < 0 or x >= width or y >= height:
+                    continue
+                z = self._read_depth_pixel(depth_msg, x, y)
+                if z is not None and z > 0.0:
+                    vals.append(z)
+        if not vals:
+            return None
