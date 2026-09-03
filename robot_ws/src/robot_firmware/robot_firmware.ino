@@ -138,3 +138,53 @@ void pollSerial() {
       continue;
     }
     if (g_serial_len + 1 < SERIAL_BUF_LEN) {
+      g_serial_buf[g_serial_len++] = c;
+    } else {
+      
+      g_serial_len = 0;
+    }
+  }
+}
+
+void setup() {
+  pinMode(PIN_LEFT_EN, OUTPUT);
+  pinMode(PIN_LEFT_RPWM, OUTPUT);
+  pinMode(PIN_LEFT_LPWM, OUTPUT);
+  pinMode(PIN_RIGHT_EN, OUTPUT);
+  pinMode(PIN_RIGHT_RPWM, OUTPUT);
+  pinMode(PIN_RIGHT_LPWM, OUTPUT);
+
+  pinMode(PIN_LEFT_A, INPUT_PULLUP);
+  pinMode(PIN_LEFT_B, INPUT_PULLUP);
+  pinMode(PIN_RIGHT_A, INPUT_PULLUP);
+  pinMode(PIN_RIGHT_B, INPUT_PULLUP);
+
+  stopMotors();
+
+  g_left_state = readQuadState(PIN_LEFT_A, PIN_LEFT_B);
+  g_right_state = readQuadState(PIN_RIGHT_A, PIN_RIGHT_B);
+
+  attachInterrupt(digitalPinToInterrupt(PIN_LEFT_A), leftEncoderISR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(PIN_LEFT_B), leftEncoderISR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(PIN_RIGHT_A), rightEncoderISR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(PIN_RIGHT_B), rightEncoderISR, CHANGE);
+
+  Serial.begin(115200);
+
+  g_last_loop_ms = millis();
+  g_last_cmd_ms = millis(); 
+}
+
+void loop() {
+  pollSerial();
+
+  const unsigned long now = millis();
+
+  
+  if ((now - g_last_cmd_ms) >= CMD_TIMEOUT_MS) {
+    if (g_cmd_left != 0 || g_cmd_right != 0) {
+      stopMotors();
+    }
+  }
+
+  if ((now - g_last_loop_ms) < CONTROL_DT_MS) {
