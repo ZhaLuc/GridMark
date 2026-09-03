@@ -88,3 +88,83 @@ def generate_launch_description() -> LaunchDescription:
                                                                    
                                                                         
     rplidar_node = Node(
+        package='rplidar_ros',
+        executable='rplidar_node',
+        name='rplidar_node',
+        output='screen',
+        parameters=[{
+            'serial_port': lidar_port,
+            'serial_baudrate': 115200,
+            'frame_id': 'lidar_link',
+            'angle_compensate': True,
+            'scan_mode': 'Standard',
+            'topic_name': '/scan',
+        }],
+    )
+    rplidar_delayed = TimerAction(
+        period=2.0,
+        actions=[
+            LogInfo(msg='[bringup] starting rplidar_ros'),
+            rplidar_node,
+        ],
+    )
+
+                                                                        
+                                                        
+                                                                        
+    wait_odom_scan_proc = _wait_for_topics(
+        ['/odom', '/scan'], name='wait_odom_scan'
+    )
+    wait_odom_scan = TimerAction(
+        period=3.0,
+        actions=[
+            LogInfo(msg='[bringup] gate: waiting for /odom and /scan'),
+            wait_odom_scan_proc,
+        ],
+    )
+
+    slam_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(slam_share, 'launch', 'slam.launch.py')
+        ),
+        launch_arguments={
+            'use_sim_time': use_sim_time,
+            'lidar_x': lidar_x,
+            'lidar_y': lidar_y,
+            'lidar_z': lidar_z,
+        }.items(),
+    )
+
+    start_slam_when_ready = RegisterEventHandler(
+        OnProcessExit(
+            target_action=wait_odom_scan_proc,
+            on_exit=[
+                LogInfo(msg='[bringup] /odom and /scan alive - starting SLAM'),
+                slam_launch,
+            ],
+        )
+    )
+
+                                                                        
+                                                                         
+                                                                        
+    wait_map_proc = _wait_for_topics(
+        ['/map'], name='wait_map', timeout_sec=180
+    )
+    wait_map = TimerAction(
+        period=8.0,
+        actions=[
+            LogInfo(msg='[bringup] gate: waiting for /map from slam_toolbox'),
+            wait_map_proc,
+        ],
+    )
+
+    navigation_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(nav_share, 'launch', 'navigation.launch.py')
+        ),
+        launch_arguments={
+            'use_sim_time': use_sim_time,
+            'autostart': 'true',
+        }.items(),
+    )
