@@ -118,3 +118,83 @@ More photos and schematics: [docs/images/README.md](docs/images/README.md)
 - [Development workflow](#development-workflow)
 - [Testing and verification](#testing-and-verification)
 - [Build process](#build-process)
+- [Deployment](#deployment)
+- [Security considerations](#security-considerations)
+- [Performance considerations](#performance-considerations)
+- [Troubleshooting](#troubleshooting)
+- [Documentation index](#documentation-index)
+- [Roadmap](#roadmap)
+- [Field checklist](#field-checklist)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
+## Core features
+
+| Feature | Implementation |
+| --- | --- |
+| Side-based differential drive | Dual BTS7960, signed PWM serial commands |
+| Wheel odometry | Quadrature ISRs → tick stream → `/odom` + TF |
+| Online 2D SLAM | `slam_toolbox` async → `/map`, `map`→`odom` |
+| Autonomous exploration | Frontier clustering → Nav2 `NavigateToPose` |
+| Object detection | YOLO26-nano fine-tuned weights → `/detections` |
+| Mission completion | N-hit confirm → stop, cancel Nav2, annotate PNG |
+| Ordered bringup | Topic gates for `/odom`, `/scan`, `/map` |
+
+## Design philosophy
+
+1. **Isolate motor power from compute power** - stall current must not brown out the Jetson.
+2. **Keep the MCU loop tight** - float-heavy odometry integration and ML stay on the Jetson.
+3. **One contract** - all packages share the same topics and frames ([docs/api.md](docs/api.md)).
+4. **Calibrated geometry** - encoder ticks, wheel radius, track width, and sensor TFs measured on the chassis.
+5. **Fail safe** - 500 ms serial command timeout stops motors if the Jetson link drops.
+
+## High-level architecture
+
+```mermaid
+flowchart TB
+  subgraph Jetson["Jetson Orin Nano Super"]
+    BR[robot_bridge]
+    SL[slam_toolbox]
+    NV[Nav2 + frontier]
+    PE[YOLO26]
+    MI[mission_node]
+  end
+  Mega[Arduino Mega] <-->|USB serial| BR
+  LiDAR[RPLIDAR A2] --> SL
+  Cam[USB cam] --> PE
+  BR -->|/odom| SL
+  SL -->|/map| NV
+  SL -->|/map| MI
+  PE -->|/detections| MI
+  NV -->|/cmd_vel| BR
+  MI -->|stop + cancel| NV
+```
+
+Deep dive: [docs/architecture.md](docs/architecture.md) · [docs/system-overview.md](docs/system-overview.md)
+
+## Technology stack
+
+| Layer | Choice |
+| --- | --- |
+| Compute | Jetson Orin Nano Super, JetPack 6.x, Ubuntu 22.04 |
+| MCU | Arduino Mega 2560 |
+| Middleware | ROS 2 Jazzy Jalisco |
+| SLAM | slam_toolbox (online async) |
+| Navigation | Nav2 + custom frontier explorer |
+| Perception | Ultralytics YOLO26-nano → ONNX / TensorRT |
+| LiDAR | RPLIDAR A2 (`rplidar_ros`) |
+| Drive | BTS7960 ×2, 4WD + encoders |
+
+## Topic and TF contract
+
+| Topic | Type |
+| --- | --- |
+| `/scan` | `sensor_msgs/LaserScan` |
+| `/odom` | `nav_msgs/Odometry` |
+| `/cmd_vel` | `geometry_msgs/Twist` |
+| `/map` | `nav_msgs/OccupancyGrid` |
+| `/image_raw` | `sensor_msgs/Image` |
+| `/detections` | `vision_msgs/Detection2DArray` |
+| `/exploration_complete` | `std_msgs/Bool` |
