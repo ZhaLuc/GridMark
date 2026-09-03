@@ -398,3 +398,194 @@ class MissionNode(Node):
                     vals.append(z)
         if not vals:
             return None
+        return sum(vals) / len(vals)
+
+    def _read_depth_pixel(self, msg: Image, x: int, y: int) -> Optional[float]:
+        enc = msg.encoding.lower()
+        data = bytes(msg.data)
+        try:
+            if enc in ('16uc1', 'mono16'):
+                                                                             
+                byte_index = y * msg.step + x * 2
+                raw = int.from_bytes(data[byte_index:byte_index + 2], byteorder='little')
+                if raw == 0:
+                    return None
+                return raw * self.depth_scale_m
+            if enc == '32fc1':
+                import struct
+                byte_index = y * msg.step + x * 4
+                raw = struct.unpack_from('<f', data, byte_index)[0]
+                if not math.isfinite(raw) or raw <= 0.0:
+                    return None
+                return float(raw)
+        except Exception: 
+            return None
+        return None
+
+    @staticmethod
+    def _quat_rotate_vector(
+        qx: float, qy: float, qz: float, qw: float,
+        vx: float, vy: float, vz: float,
+    ) -> Tuple[float, float, float]:
+        """Rotate vector v by quaternion q (x,y,z,w)."""
+                            
+        ix = qw * vx + qy * vz - qz * vy
+        iy = qw * vy + qz * vx - qx * vz
+        iz = qw * vz + qx * vy - qy * vx
+        iw = -qx * vx - qy * vy - qz * vz
+        return (
+            ix * qw + iw * -qx + iy * -qz - iz * -qy,
+            iy * qw + iw * -qy + iz * -qx - ix * -qz,
+            iz * qw + iw * -qz + ix * -qy - iy * -qx,
+        )
+
+                                                                        
+                        
+                                                                        
+
+    def _confirm_and_stop(self, target_xy: Tuple[float, float]) -> None:
+        self._mission_complete = True
+        tx, ty = target_xy
+
+        robot_xy = self._lookup_robot_map_xy()
+        if robot_xy is not None:
+            self.get_logger().info(
+                f'Robot map pose at confirm: ({robot_xy[0]:.3f}, {robot_xy[1]:.3f}) m'
+            )
+
+                                                                     
+        stop = Twist()
+        self._cmd_pub.publish(stop)
+
+                                                     
+        self._cancel_navigation()
+
+                                    
+        self.get_logger().info(
+            f'Target confirmed at map-frame ({tx:.3f}, {ty:.3f}) m - robot stopped'
+        )
+
+                                    
+        if self._latest_map is not None:
+            path = self._save_map_with_target(self._latest_map, tx, ty)
+            if path:
+                self.get_logger().info(f'Annotated map saved to {path}')
+        else:
+            self.get_logger().warn('No /map received yet; skipping PNG export')
+
+    def _lookup_robot_map_xy(self) -> Optional[Tuple[float, float]]:
+        """map → base_link translation (robot pose in the map frame)."""
+        try:
+            tf = self._tf_buffer.lookup_transform(
+                self.map_frame,
+                self.base_frame,
+                rclpy.time.Time(),
+                timeout=Duration(seconds=self.tf_timeout),
+            )
+        except TransformException as exc:
+            self.get_logger().warn(f'TF {self.map_frame}→{self.base_frame} failed: {exc}')
+            return None
+        return (tf.transform.translation.x, tf.transform.translation.y)
+
+    def _cancel_navigation(self) -> None:
+        """Cancel all active NavigateToPose goals via the action cancel service."""
+                                                                            
+        if not self._cancel_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().warn(
+                f'Cancel service {self._navigate_action}/_action/cancel_goal '
+                'unavailable; relying on zero /cmd_vel'
+            )
+            return
+
+        request = CancelGoal.Request()
+        future = self._cancel_client.call_async(request)
+
+        def _done(fut) -> None:
+            try:
+                result = fut.result()
+                n = len(result.goals_canceling) if result is not None else 0
+                self.get_logger().info(
+                    f'Nav2 cancel requested; goals_canceling={n}'
+                )
+            except Exception as exc: 
+                self.get_logger().warn(f'Nav2 cancel call failed: {exc}')
+
+        future.add_done_callback(_done)
+
+    def _save_map_with_target(
+        self,
+        grid: OccupancyGrid,
+        target_x: float,
+        target_y: float,
+    ) -> Optional[str]:
+        """
+        Render OccupancyGrid to a PNG and mark the target as a red dot.
+
+        Occupancy values: -1 unknown, 0 free, 100 occupied (typical).
+        """
+        width = grid.info.width
+        height = grid.info.height
+        if width <= 0 or height <= 0:
+            return None
+
+                                                                               
+                                                               
+        pixels = bytearray(width * height * 3)
+        data = grid.data
+        for my in range(height):
+            for mx in range(width):
+                val = int(data[my * width + mx])
+                if val < 0:
+                    r = g = b = 128 
+                elif val == 0:
+                    r = g = b = 255 
+                else:
+                                     
+                    shade = max(0, 255 - int(val * 2.55))
+                    r = g = b = shade
+                                                               
+                img_y = height - 1 - my
+                i = (img_y * width + mx) * 3
+                pixels[i] = r
+                pixels[i + 1] = g
+                pixels[i + 2] = b
+
+        img = PilImage.frombytes('RGB', (width, height), bytes(pixels))
+        draw = ImageDraw.Draw(img)
+
+        res = grid.info.resolution
+        ox = grid.info.origin.position.x
+        oy = grid.info.origin.position.y
+                          
+        mx = (target_x - ox) / res
+        my = (target_y - oy) / res
+        ix = int(round(mx))
+        iy_img = height - 1 - int(round(my))
+
+        radius = max(3, int(0.15 / res)) 
+        if 0 <= ix < width and 0 <= iy_img < height:
+            draw.ellipse(
+                (ix - radius, iy_img - radius, ix + radius, iy_img + radius),
+                fill=(255, 0, 0),
+                outline=(255, 0, 0),
+            )
+
+        stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        out_path = os.path.join(self.output_dir, f'target_map_{stamp}.png')
+        img.save(out_path)
+        return out_path
+
+def main(args=None) -> None:
+    rclpy.init(args=args)
+    node = MissionNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
