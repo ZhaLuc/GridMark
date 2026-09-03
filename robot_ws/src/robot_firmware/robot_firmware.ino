@@ -188,3 +188,53 @@ void loop() {
   }
 
   if ((now - g_last_loop_ms) < CONTROL_DT_MS) {
+    return;
+  }
+
+  const unsigned long dt_ms = now - g_last_loop_ms;
+  g_last_loop_ms = now;
+
+  
+  noInterrupts();
+  const long left_ticks = g_left_ticks;
+  const long right_ticks = g_right_ticks;
+  interrupts();
+
+  const long d_left = left_ticks - g_prev_left_ticks;
+  const long d_right = right_ticks - g_prev_right_ticks;
+  g_prev_left_ticks = left_ticks;
+  g_prev_right_ticks = right_ticks;
+
+  
+  
+  
+  const float dt_s = dt_ms * 0.001f;
+  if (dt_s > 0.0f && TICKS_PER_REVOLUTION > 0.0f) {
+    const float two_pi = 6.28318530718f;
+    const float left_omega_wheel =
+        (static_cast<float>(d_left) * two_pi) / (TICKS_PER_REVOLUTION * dt_s);
+    const float right_omega_wheel =
+        (static_cast<float>(d_right) * two_pi) / (TICKS_PER_REVOLUTION * dt_s);
+
+    const float v_left = left_omega_wheel * WHEEL_RADIUS_M;
+    const float v_right = right_omega_wheel * WHEEL_RADIUS_M;
+
+    g_v_mps = 0.5f * (v_left + v_right);
+    if (TRACK_WIDTH_M > 0.0f) {
+      g_omega_rps = (v_right - v_left) / TRACK_WIDTH_M;
+    } else {
+      g_omega_rps = 0.0f;
+    }
+  } else {
+    g_v_mps = 0.0f;
+    g_omega_rps = 0.0f;
+  }
+
+  
+  Serial.print(F("ODOM "));
+  Serial.print(d_left);
+  Serial.print(' ');
+  Serial.print(d_right);
+  Serial.print(' ');
+  Serial.println(dt_ms);
+}
