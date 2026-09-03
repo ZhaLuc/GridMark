@@ -48,3 +48,73 @@ This repository is the complete project: Mega firmware, ROS 2 Jazzy packages, tr
   </tr>
   <tr>
     <td align="center" width="50%">
+      <img src="docs/images/robot/robot-electronics-closeup.jpg" alt="Dynamixel actuators and internal PCB" width="100%" />
+      <br />
+      <em>Close-up - Dynamixel actuators and onboard PCB</em>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/features/feature-gripper-closeup.jpg" alt="Gripper close-up during testing" width="100%" />
+      <br />
+      <em>Gripper close-up during track testing</em>
+    </td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/images/features/feature-robot-track.jpg" alt="GridMark following the LED-lined track" width="780" />
+  <br />
+  <em>Operating capture - navigating the LED-lined course</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/features/feature-robot-curve.jpg" alt="GridMark taking a curve on the course" width="780" />
+  <br />
+  <em>Curve run - chassis and arm lit on the black-tape path</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/robot/robot-side-lidar.jpg" alt="Side view showing LiDAR and arm" width="780" />
+  <br />
+  <em>Hardware detail - LiDAR, arm, and battery pack on the layered deck</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/features/feature-slam-map-rviz.jpg" alt="SLAM occupancy map in RViz" width="780" />
+  <br />
+  <em>Online SLAM occupancy map in RViz with live LaserScan</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/features/feature-slam-map-3d.jpg" alt="3D view of SLAM occupancy map" width="780" />
+  <br />
+  <em>3D RViz view of the occupancy map during mapping</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/features/feature-annotated-mission-map.jpg" alt="Annotated mission map with target mark" width="780" />
+  <br />
+  <em>Mission map with the confirmed target marked in the map frame</em>
+</p>
+
+More photos and schematics: [docs/images/README.md](docs/images/README.md)
+
+---
+
+## Table of contents
+
+- [About](#about)
+- [Core features](#core-features)
+- [Design philosophy](#design-philosophy)
+- [High-level architecture](#high-level-architecture)
+- [Technology stack](#technology-stack)
+- [Topic and TF contract](#topic-and-tf-contract)
+- [Project structure](#project-structure)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Quick start](#quick-start)
+- [Examples](#examples)
+- [Execution flow](#execution-flow)
+- [Module overview](#module-overview)
+- [Development workflow](#development-workflow)
+- [Testing and verification](#testing-and-verification)
+- [Build process](#build-process)
