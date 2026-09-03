@@ -118,3 +118,133 @@ class MissionNode(Node):
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self)
 
+        self._cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self._nav_client = ActionClient(self, NavigateToPose, action_name)
+                                                               
+        self._cancel_client = self.create_client(
+            CancelGoal, f'{action_name}/_action/cancel_goal'
+        )
+        self._navigate_action = action_name
+
+        map_qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+        )
+        self.create_subscription(OccupancyGrid, map_topic, self._on_map, map_qos)
+        self.create_subscription(Detection2DArray, '/detections', self._on_detections, 10)
+        self.create_subscription(Bool, '/exploration_complete', self._on_exploration_complete, 10)
+
+        if self.use_depth:
+                                                                                   
+            self.create_subscription(Image, self.depth_topic, self._on_depth, 10)
+            self.get_logger().info(
+                f'use_depth=True: sampling depth from {self.depth_topic}'
+            )
+        else:
+            self.get_logger().info(
+                'use_depth=False: using no-depth bearing + ground-plane / '
+                'assumed_range_m projection (project spec fallback)'
+            )
+
+        os.makedirs(self.output_dir, exist_ok=True)
+        self.get_logger().info(
+            f'mission_node watching class="{self.target_class}" '
+            f'conf>={self.conf_thresh}, N={self.consecutive_required}'
+        )
+
+                                                                        
+               
+                                                                        
+
+    def _on_map(self, msg: OccupancyGrid) -> None:
+        self._latest_map = msg
+
+    def _on_depth(self, msg: Image) -> None:
+        self._latest_depth = msg
+
+    def _on_exploration_complete(self, msg: Bool) -> None:
+        if msg.data:
+            self.get_logger().info(
+                'Exploration complete signal received '
+                '(mission still waits for a confirmed target detection).'
+            )
+
+    def _on_detections(self, msg: Detection2DArray) -> None:
+        if self._mission_complete:
+            return
+
+        best = self._best_target_detection(msg)
+        if best is None:
+            self._consecutive_hits = 0
+            self._estimate_buffer.clear()
+            return
+
+        estimate = self._estimate_target_map_xy(best)
+        if estimate is None:
+            self._consecutive_hits = 0
+            self._estimate_buffer.clear()
+            return
+
+        self._consecutive_hits += 1
+        self._estimate_buffer.append(estimate)
+        self.get_logger().info(
+            f'Target hit {self._consecutive_hits}/{self.consecutive_required} '
+            f'at map approx ({estimate[0]:.2f}, {estimate[1]:.2f})'
+        )
+
+        if self._consecutive_hits < self.consecutive_required:
+            return
+
+                                                                   
+        n = min(len(self._estimate_buffer), self.consecutive_required)
+        xs = [p[0] for p in self._estimate_buffer[-n:]]
+        ys = [p[1] for p in self._estimate_buffer[-n:]]
+        target_xy = (sum(xs) / n, sum(ys) / n)
+        self._confirm_and_stop(target_xy)
+
+    def _best_target_detection(self, msg: Detection2DArray) -> Optional[Detection2D]:
+        best: Optional[Detection2D] = None
+        best_score = -1.0
+        for det in msg.detections:
+            for res in det.results:
+                class_id = str(res.hypothesis.class_id)
+                score = float(res.hypothesis.score)
+                if class_id != self.target_class:
+                    continue
+                if score < self.conf_thresh:
+                    continue
+                if score > best_score:
+                    best_score = score
+                    best = det
+        return best
+
+                                                                        
+                                  
+                                                                        
+
+    def _estimate_target_map_xy(
+        self,
+        det: Detection2D,
+    ) -> Optional[Tuple[float, float]]:
+        """
+        Estimate target position in the map frame from a 2D detection.
+
+        Pipeline:
+          1) Pixel (u, v) = bbox center in the image.
+          2) Build a unit bearing ray in the camera optical frame from intrinsics.
+          3) Obtain range along that ray (depth image OR no-depth fallback).
+          4) Scale the ray to a 3D point in camera_link, transform to map.
+        """
+        u = float(det.bbox.center.x)
+        v = float(det.bbox.center.y)
+
+                                                               
+                                                                                 
+                                                                         
+                                                                                             
+         
+                                                                                   
+                                                                        
+                                                                        
