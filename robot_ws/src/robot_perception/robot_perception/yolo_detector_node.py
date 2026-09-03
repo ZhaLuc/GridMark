@@ -138,3 +138,59 @@ class YoloDetectorNode(Node):
         boxes = getattr(result, 'boxes', None)
         if boxes is None or len(boxes) == 0:
             self._pub.publish(det_array)
+            return
+
+        xyxy = boxes.xyxy.cpu().numpy()
+        confs = boxes.conf.cpu().numpy()
+        clss = boxes.cls.cpu().numpy().astype(int)
+
+        for i in range(len(xyxy)):
+            conf = float(confs[i])
+            if conf < self._conf:
+                continue
+            cls_id = int(clss[i])
+            cls_name = str(names.get(cls_id, str(cls_id)))
+            if self._class_filter and cls_name not in self._class_filter:
+                continue
+
+            x1, y1, x2, y2 = [float(v) for v in xyxy[i]]
+            cx = 0.5 * (x1 + x2)
+            cy = 0.5 * (y1 + y2)
+            w = max(0.0, x2 - x1)
+            h = max(0.0, y2 - y1)
+
+            det = Detection2D()
+            det.header = msg.header
+                                                                                         
+            det.bbox.center.x = cx
+            det.bbox.center.y = cy
+            det.bbox.center.theta = 0.0
+            det.bbox.size_x = w
+            det.bbox.size_y = h
+
+            hyp = ObjectHypothesisWithPose()
+            hyp.hypothesis.class_id = cls_name
+            hyp.hypothesis.score = conf
+            det.results.append(hyp)
+
+            if hasattr(det, 'id'):
+                det.id = cls_name
+
+            det_array.detections.append(det)
+
+        self._pub.publish(det_array)
+
+def main(args=None) -> None:
+    rclpy.init(args=args)
+    node = YoloDetectorNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
