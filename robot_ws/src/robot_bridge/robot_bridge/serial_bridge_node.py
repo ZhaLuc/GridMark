@@ -88,3 +88,83 @@ class SerialBridgeNode(Node):
 
         self.get_logger().info(
             f'serial_bridge_node on {self._port_name} @ {self._baud}; '
+            f'TPR={self._ticks_per_rev}, R={self._wheel_radius}, '
+            f'track={self._track_width}, vmax={self._max_wheel_speed}'
+        )
+
+    def _open_serial(self) -> None:
+        try:
+            self._serial = serial.Serial(
+                port=self._port_name,
+                baudrate=self._baud,
+                timeout=0.05,
+                write_timeout=0.05,
+            )
+                                                    
+            self._serial.reset_input_buffer()
+            self._serial.reset_output_buffer()
+        except SerialException as exc:
+            self.get_logger().error(f'Failed to open serial port {self._port_name}: {exc}')
+            self._serial = None
+            return
+
+        self._rx_running = True
+        self._rx_thread = threading.Thread(target=self._rx_loop, daemon=True)
+        self._rx_thread.start()
+
+    def _on_cmd_vel(self, msg: Twist) -> None:
+        with self._lock:
+            self._latest_cmd = msg
+
+    def _twist_to_pwm(self, linear_x: float, angular_z: float) -> tuple[int, int]:
+        """
+        Inverse of firmware forward kinematics, then scale wheel speeds to PWM.
+
+        Firmware forward:
+          v = 0.5 * (v_l + v_r)
+          omega = (v_r - v_l) / track_width
+        Inverse:
+          v_l = v - omega * track_width / 2
+          v_r = v + omega * track_width / 2
+        """
+        half_track = 0.5 * self._track_width
+        v_left = linear_x - angular_z * half_track
+        v_right = linear_x + angular_z * half_track
+
+        def speed_to_pwm(speed_mps: float) -> int:
+            if self._max_wheel_speed <= 0.0:
+                return 0
+            scaled = (speed_mps / self._max_wheel_speed) * 255.0
+            pwm = int(round(scaled))
+            return max(-255, min(255, pwm))
+
+        return speed_to_pwm(v_left), speed_to_pwm(v_right)
+
+    def _on_cmd_timer(self) -> None:
+        with self._lock:
+            cmd = self._latest_cmd
+
+        left_pwm, right_pwm = self._twist_to_pwm(cmd.linear.x, cmd.angular.z)
+        line = f'L{left_pwm} R{right_pwm}\n'
+
+        if self._serial is None or not self._serial.is_open:
+            return
+        try:
+            self._serial.write(line.encode('ascii'))
+        except SerialException as exc:
+            self.get_logger().error(f'Serial write failed: {exc}')
+
+    def _rx_loop(self) -> None:
+        while self._rx_running and self._serial is not None:
+            try:
+                raw = self._serial.read(128)
+            except SerialException as exc:
+                self.get_logger().error(f'Serial read failed: {exc}')
+                break
+            if not raw:
+                continue
+            try:
+                text = raw.decode('ascii', errors='ignore')
+            except Exception: 
+                continue
+            self._rx_buffer += text
