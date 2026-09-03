@@ -78,3 +78,63 @@ class YoloDetectorNode(Node):
             raise SystemExit(1) from exc
 
         if not os.path.isfile(weights):
+            self.get_logger().error(
+                f'YOLO weights not found at {weights}. '
+                'Use target_object_n.pt / .onnx from robot_perception/models, '
+                'or a TensorRT .engine exported on the Orin '
+                '(see robot_perception/models/README.md).'
+            )
+            self._model = None
+            return
+
+        self.get_logger().info(f'Loading YOLO weights: {weights}')
+        self._model = YOLO(weights)
+        self.get_logger().info('YOLO model loaded')
+
+    def _on_image(self, msg: Image) -> None:
+        self._latest_image = msg
+
+    def _on_timer(self) -> None:
+        if self._model is None or self._latest_image is None:
+            return
+
+        msg = self._latest_image
+        self._latest_image = None
+
+        try:
+                                                                             
+            encoding = msg.encoding.lower()
+            if encoding in ('rgb8', 'bgr8', 'mono8'):
+                cv_image = self._bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            else:
+                cv_image = self._bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        except CvBridgeError as exc:
+            self.get_logger().error(f'cv_bridge conversion failed: {exc}')
+            return
+
+        if not isinstance(cv_image, np.ndarray) or cv_image.size == 0:
+            return
+
+        try:
+            results = self._model.predict(
+                source=cv_image,
+                conf=self._conf,
+                device=self._device,
+                verbose=False,
+            )
+        except Exception as exc: 
+            self.get_logger().error(f'YOLO inference failed: {exc}')
+            return
+
+        det_array = Detection2DArray()
+        det_array.header = msg.header
+
+        if not results:
+            self._pub.publish(det_array)
+            return
+
+        result = results[0]
+        names = result.names if hasattr(result, 'names') else {}
+        boxes = getattr(result, 'boxes', None)
+        if boxes is None or len(boxes) == 0:
+            self._pub.publish(det_array)
