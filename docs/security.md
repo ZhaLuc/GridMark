@@ -16,3 +16,21 @@ This is a research/education robot stack, not a hardened product. Reviewers shou
 | --- | --- |
 | Unauthenticated `/cmd_vel` | Anyone on the ROS domain can drive - use isolated network |
 | Serial spoofing | No auth on USB CDC ACM |
+| Model supply chain | You train/export your own `.engine`; do not trust random binaries |
+| RCE via pickle/weights | Prefer official Ultralytics export path; keep Jetson patched |
+
+## Privacy
+
+Camera frames may leave the robot if you remapping/record bags - handle datasets carefully.
+
+## Recommendations
+
+1. Dedicated Wi-Fi / no default public DDS discovery exposure. 
+2. Disable unused USB gadgets. 
+3. Store LiPo safely when unattended. 
+4. E-stop: hardware switch on battery positive (documented power tree). 
+
+## Related
+
+- [Power wiring](hardware/wiring/power-wiring.md) 
+- [Performance](performance.md) (resource exhaustion as availability issue) 
