@@ -22,3 +22,27 @@ Standard ROS 2 workspace under `robot_ws/`. Documentation lives in `/docs` at th
 4. Update configuration tables.
 
 ## Testing approach (this repo)
+
+There is **no** automated hardware-in-the-loop CI in-tree. Verification is manual per [verification-checklist.md](verification-checklist.md). Optional future work: unit tests for frontier clustering and kinematics with synthetic grids/ticks.
+
+## Build process
+
+```bash
+cd robot_ws
+colcon build --symlink-install
+source install/setup.bash
+```
+
+Firmware: Arduino IDE upload (separate toolchain).
+
+## Extensibility ideas (not implemented)
+
+- IMU fusion on Mega or Jetson 
+- Depth camera default for mission 
+- Gazebo/Ignition simulation package 
+- Lifecycle management for mission/explorer 
+
+## Related
+
+- [Contributing](contributing.md) 
+- [Architecture](architecture.md) 
