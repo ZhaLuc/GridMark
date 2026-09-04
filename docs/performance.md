@@ -16,3 +16,21 @@ Benchmarks from our Orin Nano Super bring-up:
 - USB contention without powered hub → scan drops 
 - Unbounded YOLO → map update lag / controller timeouts 
 - Huge occupancy maps → frontier O(W×H) cost every replan 
+
+## Tunables that affect load
+
+| Knob | Effect |
+| --- | --- |
+| `inference_hz` | Detector GPU/CPU |
+| `throttle_scans` / travel gates | SLAM graph rate |
+| Local costmap size 3×3 m | Controller CPU |
+| `cmd_send_hz` | Serial traffic (keep ~20) |
+
+## Latency path (cmd → motion)
+
+Teleop/Nav2 → bridge timer (≤50 ms) → USB → Mega loop (20 ms) → PWM. Firmware timeout 500 ms is a safety ceiling, not a performance target.
+
+## Related
+
+- [Configuration](configuration.md) 
+- [Troubleshooting](troubleshooting.md) 
