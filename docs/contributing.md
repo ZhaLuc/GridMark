@@ -13,3 +13,19 @@
 2. Build affected packages with `colcon`.
 3. Update docs for any behavior/parameter change.
 4. Open a PR with summary + test plan.
+
+## Commit messages
+
+Write clear commit messages that describe the change (e.g. "Add frontier blacklist radius parameter").
+
+## Code review checklist
+
+- [ ] Topics/types match contract
+- [ ] Launch order / gates still valid
+- [ ] Field numbers / docs updated when behavior changes
+- [ ] Package.xml dependencies updated
+
+## Related
+
+- [Development](development.md)
+- [API](api.md)
