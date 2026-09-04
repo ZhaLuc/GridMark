@@ -3,5 +3,9 @@
     video_device: "/dev/video0"
     framerate: 30.0
     io_method: "mmap"
-
-# interim defaults
+    frame_id: "camera_link"
+    pixel_format: "yuyv"
+    av_device_format: "YUV422P"
+    image_width: 640
+    image_height: 480
+    camera_name: "usb_cam"
