@@ -6,10 +6,10 @@
 
 Autonomous indoor SLAM robot - Jetson Orin Nano Super · Arduino Mega 2560
 
-[![License: MIT](https://img.shields.io/github/license/LucasZhang3/SLAM)](LICENSE)
-[![GitHub last commit](https://img.shields.io/github/last-commit/LucasZhang3/SLAM)](https://github.com/LucasZhang3/SLAM/commits/main)
-[![GitHub repo size](https://img.shields.io/github/repo-size/LucasZhang3/SLAM)](https://github.com/LucasZhang3/SLAM)
-[![GitHub top language](https://img.shields.io/github/languages/top/LucasZhang3/SLAM)](https://github.com/LucasZhang3/SLAM)
+[![License: MIT](https://img.shields.io/github/license/ZhaLuc/SLAM)](LICENSE)
+[![GitHub last commit](https://img.shields.io/github/last-commit/ZhaLuc/SLAM)](https://github.com/ZhaLuc/SLAM/commits/main)
+[![GitHub repo size](https://img.shields.io/github/repo-size/ZhaLuc/SLAM)](https://github.com/ZhaLuc/SLAM)
+[![GitHub top language](https://img.shields.io/github/languages/top/ZhaLuc/SLAM)](https://github.com/ZhaLuc/SLAM)
 
 </div>
 
